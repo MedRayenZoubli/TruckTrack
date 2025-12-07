@@ -118,7 +118,7 @@ Each truck's status is determined by its distance to the **nearest delivery node
    - Navigate to `http://localhost:5295` in your browser
    - Watch trucks move and change status on the map
 
-## 🔧 API Reference
+##  API Reference
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
