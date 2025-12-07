@@ -1,0 +1,474 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>🚚 Delivery Truck Monitor</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        h1 {
+            color: #333;
+            margin: 0 0 20px 0;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            grid-template-rows: auto 1fr;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            height: calc(100vh - 80px);
+        }
+
+        .sidebar {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        .map-container {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            grid-row: 1 / 3;
+        }
+
+        #map {
+            height: 100%;
+            border-radius: 8px;
+        }
+
+        .trucks-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        .status-indicator {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .status-connected {
+            background: #90EE90;
+            color: green;
+        }
+
+        .status-disconnected {
+            background: #FF6B6B;
+            color: red;
+        }
+
+        .truck {
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            background: white;
+            transition: all 0.3s;
+        }
+
+            .truck.ok {
+                border-color: green;
+                background: #f0fff0;
+            }
+
+            .truck.alert {
+                border-color: orange;
+                background: #fffbf0;
+            }
+
+            .truck.stop {
+                border-color: red;
+                background: #fff0f0;
+                animation: pulse 1s infinite;
+            }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(255,0,0,0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 5px rgba(255,0,0,0);
+            }
+        }
+
+        .truck-id {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .truck-status {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+
+        .truck-info {
+            font-size: 14px;
+            color: #666;
+            margin: 5px 0;
+        }
+
+        .nodes {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .node {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f9f9f9;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .node-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .node-coords {
+            color: #999;
+            font-size: 11px;
+        }
+
+        .legend {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .legend-item {
+            margin: 5px 0;
+        }
+
+        /* Custom Leaflet marker styles */
+        .truck-marker {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+            .truck-marker.ok {
+                background: #4CAF50;
+            }
+
+            .truck-marker.alert {
+                background: #FF9800;
+            }
+
+            .truck-marker.stop {
+                background: #F44336;
+                animation: pulse-marker 1s infinite;
+            }
+
+        @keyframes pulse-marker {
+            0%, 100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.2);
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>tracking flotte</h1>
+
+    <div class="container">
+        <div class="sidebar">
+            <div id="connection" class="status-indicator status-disconnected">
+                Connecting...
+            </div>
+
+            <div class="nodes">
+                <h3> Delivery Nodes</h3>
+                <div id="nodesList"></div>
+            </div>
+
+            <div class="legend">
+                <strong>Map Legend:</strong>
+                <div class="legend-item">🏢 Blue Markers = Delivery Nodes</div>
+                <div class="legend-item">🚚 Green Trucks = OK (≤5km)</div>
+                <div class="legend-item">⚠️ Orange Trucks = ALERT (5-8km)</div>
+                <div class="legend-item">🛑 Red Trucks = STOP (>8km)</div>
+            </div>
+        </div>
+
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+
+        <div class="trucks-container">
+            <h2>Active Trucks</h2>
+            <div id="trucks"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5295';
+        const WS_URL = 'ws://localhost:5295/ws';
+
+        let map;
+        let nodeMarkers = {};
+        let truckMarkers = {};
+        let nodeCircles = {};
+
+        // Initialize map
+        function initMap() {
+            // Center on Downtown Warehouse (34.05, -118.25)
+            map = L.map('map').setView([34.05, -118.25], 11);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            console.log('🗺️ Map initialized');
+        }
+
+        // Add node marker to map
+        function addNodeToMap(node) {
+            // Handle both Pascal and camel case
+            const id = node.id || node.Id;
+            const name = node.name || node.Name;
+            const lat = node.latitude || node.Latitude;
+            const lon = node.longitude || node.Longitude;
+            const alertRadius = node.alertRadius || node.AlertRadius || 5;
+            const stopRadius = node.stopRadius || node.StopRadius || 8;
+
+            console.log('Adding node to map:', { id, name, lat, lon, alertRadius, stopRadius });
+
+            if (!lat || !lon) {
+                console.error('Invalid node coordinates:', node);
+                return;
+            }
+
+            // Node marker
+            const marker = L.marker([lat, lon], {
+                icon: L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style="background: #2196F3; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>`,
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).addTo(map);
+
+            marker.bindPopup(`<b>${name}</b><br>Alert: ${alertRadius}km<br>Stop: ${stopRadius}km`);
+            nodeMarkers[id] = marker;
+
+            // Alert radius circle (5km)
+            const alertCircle = L.circle([lat, lon], {
+                color: 'orange',
+                fillColor: '#FFA500',
+                fillOpacity: 0.1,
+                radius: alertRadius * 1000 // Convert km to meters
+            }).addTo(map);
+
+            // Stop radius circle (8km)
+            const stopCircle = L.circle([lat, lon], {
+                color: 'red',
+                fillColor: '#FF0000',
+                fillOpacity: 0.05,
+                radius: stopRadius * 1000
+            }).addTo(map);
+
+            nodeCircles[id] = { alert: alertCircle, stop: stopCircle };
+
+            console.log(`🗺️ Added node: ${name} at (${lat}, ${lon})`);
+        }
+
+        // Update or create truck marker
+        function updateTruckOnMap(truck) {
+            const id = truck.Id || truck.id;
+            const lat = truck.Latitude || truck.latitude;
+            const lon = truck.Longitude || truck.longitude;
+            const status = (truck.Status || truck.status || 'UNKNOWN').toLowerCase();
+
+            const emoji = {
+                'ok': '✅',
+                'alert': '⚠️',
+                'stop': '🛑',
+                'unknown': '❓'
+            }[status] || '❓';
+
+            if (truckMarkers[id]) {
+                // Update existing marker
+                truckMarkers[id].setLatLng([lat, lon]);
+                truckMarkers[id].setIcon(L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div class="truck-marker ${status}">${emoji}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                }));
+            } else {
+                // Create new marker
+                const marker = L.marker([lat, lon], {
+                    icon: L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div class="truck-marker ${status}">${emoji}</div>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    })
+                }).addTo(map);
+
+                marker.bindPopup(`<b>${id}</b>`);
+                truckMarkers[id] = marker;
+            }
+
+            // Update popup
+            const distance = truck.DistanceToNearestNode || truck.distanceToNearestNode || 0;
+            const nodeName = truck.NearestNodeName || truck.nearestNodeName || 'Unknown';
+            truckMarkers[id].setPopupContent(
+                `<b>${id}</b><br>Status: ${status.toUpperCase()}<br>Distance: ${distance.toFixed(2)}km from ${nodeName}`
+            );
+        }
+
+        console.log('Starting dashboard...');
+        initMap();
+
+        const ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+            console.log('✅ WebSocket connected');
+            updateConnectionStatus(true);
+            loadNodes();
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const truck = JSON.parse(event.data);
+                const id = truck.id || truck.Id;
+                const status = truck.status || truck.Status;
+                console.log(`📦 Received: ${id} | Status: ${status || 'undefined'}`);
+                displayTruck(truck);
+                updateTruckOnMap(truck);
+            } catch (error) {
+                console.log(`❌ Error parsing message: ${error.message}`);
+                console.error('Raw message:', event.data);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log('❌ WebSocket closed');
+            updateConnectionStatus(false);
+        };
+
+        ws.onerror = (error) => {
+            console.log('❌ WebSocket error');
+            updateConnectionStatus(false);
+        };
+
+        function updateConnectionStatus(connected) {
+            const el = document.getElementById('connection');
+            if (connected) {
+                el.textContent = '🟢 Connected';
+                el.className = 'status-indicator status-connected';
+            } else {
+                el.textContent = '🔴 Disconnected';
+                el.className = 'status-indicator status-disconnected';
+            }
+        }
+
+        function loadNodes() {
+            console.log('📍 Loading nodes...');
+            fetch(`${API_BASE}/api/nodes`)
+                .then(r => {
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    return r.json();
+                })
+                .then(nodes => {
+                    console.log(`✅ Loaded ${nodes.length} nodes`);
+                    const html = nodes.map(node => `
+                            <div class="node">
+                                <div class="node-name">${node.name || node.Name}</div>
+                                <div class="node-coords">
+                                    ${(node.latitude || node.Latitude).toFixed(4)}°N, ${Math.abs(node.longitude || node.Longitude).toFixed(4)}°W
+                                </div>
+                            </div>
+                        `).join('');
+                    document.getElementById('nodesList').innerHTML = html;
+
+                    // Add nodes to map
+                    nodes.forEach(node => addNodeToMap(node));
+                })
+                .catch(err => {
+                    console.log(`❌ Failed to load nodes: ${err.message}`);
+                });
+        }
+
+        function displayTruck(truck) {
+            // Handle both Pascal case (C#) and camel case (JavaScript)
+            const id = truck.id || truck.Id;
+            const status = truck.status || truck.Status || 'UNKNOWN';
+            const lat = truck.latitude || truck.Latitude || 0;
+            const lon = truck.longitude || truck.Longitude || 0;
+            const distance = truck.distanceToNearestNode || truck.DistanceToNearestNode || 0;
+            const nodeName = truck.nearestNodeName || truck.NearestNodeName || 'Unknown';
+            const lastUpdate = truck.lastUpdate || truck.LastUpdate;
+
+            // Validate truck data
+            if (!id) {
+                console.log('❌ Invalid truck data received - no ID');
+                return;
+            }
+
+            let element = document.getElementById('truck-' + id);
+
+            if (!element) {
+                element = document.createElement('div');
+                element.id = 'truck-' + id;
+                document.getElementById('trucks').appendChild(element);
+                console.log(`🚚 New truck displayed: ${id}`);
+            }
+
+            const statusEmoji = {
+                'OK': '✅',
+                'ALERT': '⚠️',
+                'STOP': '🛑',
+                'UNKNOWN': '❓'
+            }[status] || '❓';
+
+            element.className = 'truck ' + status.toLowerCase();
+
+            const lastUpdateFormatted = lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : 'N/A';
+
+            element.innerHTML = `
+                    <div class="truck-id">${id}</div>
+                    <div class="truck-status">${statusEmoji} ${status}</div>
+                    <div class="truck-info">📍 ${lat.toFixed(4)}°N, ${Math.abs(lon).toFixed(4)}°W</div>
+                    <div class="truck-info">📏 ${distance.toFixed(2)} km from ${nodeName}</div>
+                    <div class="truck-info">⏰ ${lastUpdateFormatted}</div>
+                `;
+        }
+    </script>
+</body>
+</html>
