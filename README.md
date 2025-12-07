@@ -1,4 +1,4 @@
-# 🚚 Delivery Truck Monitor
+#  Delivery Truck Monitor
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-blue)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -6,16 +6,16 @@
 
 A real-time delivery truck monitoring system that tracks GPS positions, computes proximity status, and broadcasts updates via **HTTP**, **WebSockets**, and **MQTT**.
 
-## ✨ Features
+##  Features
 
-- 📍 **Real-time GPS Tracking** – Truck simulators send position updates via HTTP every 2 seconds
-- 📡 **Live Dashboard** – WebSocket-powered browser UI with interactive Leaflet map
-- 🚨 **Smart Status Alerts** – Automatic OK/ALERT/STOP status based on distance to delivery nodes
-- 📢 **MQTT Pub/Sub** – Backend publishes status changes to truck simulators for immediate feedback
-- 🏗️ **Clean Architecture** – Dependency injection, interface-based design, circular dependency resolved
-- 🎯 **Multi-truck Support** – Handle multiple simulators simultaneously
+-  **Real-time GPS Tracking** – Truck simulators send position updates via HTTP every 2 seconds
+-  **Live Dashboard** – WebSocket-powered browser UI with interactive Leaflet map
+-  **Smart Status Alerts** – Automatic OK/ALERT/STOP status based on distance to delivery nodes
+-  **MQTT Pub/Sub** – Backend publishes status changes to truck simulators for immediate feedback
+-  **Clean Architecture** – Dependency injection, interface-based design, circular dependency resolved
+-  **Multi-truck Support** – Handle multiple simulators simultaneously
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
@@ -26,53 +26,18 @@ A real-time delivery truck monitoring system that tracks GPS positions, computes
 | Serialization | JSON (System.Text.Json) |
 | Package Manager | NuGet (MQTTnet) |
 
-## 📊 Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Browser Dashboard                         │
-│  (HTML/JS + Leaflet Map + WebSocket client)                 │
-└──────────────────────┬──────────────────────────────────────┘
-                       │ WebSocket (ws://localhost:5295/ws)
-                       │ Receives Vehicle JSON in real-time
-┌──────────────────────▼──────────────────────────────────────┐
-│           ASP.NET Backend (Program.cs + Controllers)         │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ DeliveryManager (in-memory truck state)                │ │
-│  │  • Stores trucks, delivery nodes, WebSocket clients    │ │
-│  │  • Computes distance & status (OK/ALERT/STOP)         │ │
-│  │  • Broadcasts updates to all connected dashboards      │ │
-│  └────────────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ MqttPublisherService (INotificationPublisher)          │ │
-│  │  • Publishes status changes to trucks/{id}/status      │ │
-│  │  • Connects to MQTT broker (localhost:1883)            │ │
-│  └────────────────────────────────────────────────────────┘ │
-└──────────┬──────────────────────────────────────────────────┘
-           │ HTTP POST /api/vehicles/update
-           │ (receives GPS updates every 2 sec)
-           │
-           │ MQTT (trucks/{id}/status topic)
-           │ (receives status alerts)
-┌──────────▼──────────────────────────────────────────────────┐
-│              Truck Simulator (Console App)                   │
-│  • Sends random/drifting GPS to backend via HTTP            │
-│  • Subscribes to MQTT for status changes                    │
-│  • Freezes when STOP status is received                     │
-└──────────────────────────────────────────────────────────────┘
-```
-
-## 🚦 Status Logic
+##  Status Logic
 
 Each truck's status is determined by its distance to the **nearest delivery node**:
 
 | Distance | Status | Indicator |
 |----------|--------|-----------|
-| ≤ 5 km   | OK     | ✅ Green  |
-| 5–8 km   | ALERT  | ⚠️ Orange |
-| > 8 km   | STOP   | 🛑 Red    |
+| ≤ 5 km   | OK     |  Green  |
+| 5–8 km   | ALERT  |  Orange |
+| > 8 km   | STOP   |  Red    |
 
-## 📡 Communication Protocols
+##  Communication Protocols
 
 ### HTTP (Truck → Backend)
 **Endpoint:** `POST /api/vehicles/update`  
@@ -112,7 +77,7 @@ Each truck's status is determined by its distance to the **nearest delivery node
 }
 ```
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 - .NET 8 SDK
@@ -147,6 +112,7 @@ Each truck's status is determined by its distance to the **nearest delivery node
    dotnet run
    ```
    - Change `TRUCK_ID` in `Program.cs` to run multiple simulators
+   - In the current project exists 3 diffrent simulators to showcase the status logic in real time
 
 5. **Open dashboard**
    - Navigate to `http://localhost:5295` in your browser
@@ -161,33 +127,10 @@ Each truck's status is determined by its distance to the **nearest delivery node
 | `/api/vehicles/status/{status}` | GET | Filter trucks by status (OK/ALERT/STOP) |
 | `/ws` | WS | WebSocket for live updates |
 
-## 🏗️ Design Patterns Used
 
-### Dependency Injection (DI)
-- `DeliveryManager` and `MqttPublisherService` registered as singletons in ASP.NET DI container
-- Resolves circular dependency via `INotificationPublisher` interface
 
-### Repository Pattern
-- In-memory `Dictionary<string, Vehicle>` acts as truck repository
-- Single source of truth for vehicle state
 
-### Observer Pattern
-- WebSocket clients subscribe to truck updates
-- Backend broadcasts to all connected clients
-
-### Pub/Sub (MQTT)
-- Backend publishes status changes to topics
-- Truck simulators subscribe and react to alerts
-
-## 🛑 Circular Dependency Resolution
-
-**Problem:** Original design had `DeliveryManager` and `MqttPublisherService` referencing each other.  
-**Solution:** Introduced `INotificationPublisher` interface:
-- `DeliveryManager` depends on abstraction, not concrete class
-- `MqttPublisherService` implements the interface with no reverse dependency
-- DI container can now resolve both cleanly
-
-## 📊 Example Workflow
+##  Example Workflow
 
 1. **Simulator sends GPS** → HTTP POST to `/api/vehicles/update`
 2. **Backend receives update** → `DeliveryManager` updates truck position
@@ -197,75 +140,15 @@ Each truck's status is determined by its distance to the **nearest delivery node
 6. **Backend broadcasts** → WebSocket pushes updated vehicle to all dashboards
 7. **Dashboard updates** → Marker moves, color changes, info panel updates
 
-## 📁 Project Structure
 
-```
-delivery-truck-monitor/
-├── vehicule_tracker2._0/              # ASP.NET Backend
-│   ├── Program.cs                     # DI, HTTP, WebSocket, MQTT setup
-│   ├── DeliveryManager.cs             # Core logic: trucks, nodes, status
-│   ├── MqttPublisherService.cs        # MQTT client (INotificationPublisher)
-│   ├── INotificationPublisher.cs      # Interface (breaks circular dependency)
-│   ├── Models/
-│   │   ├── Vehicle.cs
-│   │   ├── LocationNode.cs
-│   │   └── VehicleUpdate.cs
-│   └── Controllers/
-│       └── VehiclesController.cs      # REST endpoints
-├── TruckSimulator/
-│   ├── Program.cs                     # Truck simulator console app
-│   └── .csproj
-├── wwwroot/
-│   └── index.html                     # Dashboard UI (Leaflet + WebSocket)
-├── README.md
-└── .gitignore
-```
-
-## 🧪 Testing
-
-Run multiple truck simulators to test concurrent behavior:
-```bash
-# Terminal 1: Simulator stays in ALERT
-dotnet run --project TruckSimulator
-
-# Terminal 2: Simulator drifts to STOP
-cd TruckSimulator && sed 's/TRUCK-001/TRUCK-002/g' Program.cs > Program2.cs && dotnet run
-```
-
-## 📝 Future Improvements
-
-- [ ] Database persistence (replace in-memory dictionary)
-- [ ] User authentication & authorization
-- [ ] Advanced filtering on dashboard (by status, distance, time)
-- [ ] Historical data visualization
-- [ ] Mobile app for truck drivers
-- [ ] Alert notifications (email/SMS on STOP)
-- [ ] Route optimization
-- [ ] Geofencing for multiple zones
-- [ ] Driver acknowledgment for alerts
-
-## 🔐 Security Notes
-
-Currently the project has no authentication. For production:
-- Add JWT/OAuth authentication to API endpoints
-- Use TLS/SSL for WebSocket and HTTP connections
-- Implement MQTT broker authentication
-- Add input validation and rate limiting
-- Use environment variables for sensitive config (broker address, ports)
-
-## 📄 License
+##  License
 
 MIT License – see [LICENSE](LICENSE) file for details
 
-## 👨‍💻 Author
+##  Author
 
 Built as a portfolio project demonstrating real-time system design with HTTP, WebSockets, MQTT, and clean architecture principles.
 
-## 📞 Support
-
-For questions or issues, please open a [GitHub issue](https://github.com/yourusername/delivery-truck-monitor/issues).
-
----
 
 **Last Updated:** December 7, 2025  
 **Status:** Active & Maintained
